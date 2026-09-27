@@ -1,11 +1,10 @@
-R1 Chess v1.4
-- 10 AI difficulty levels (Levels 6-10 progressively deeper/stronger)
-- Piece styles: Classic chess symbols, Letters, Minimal, Retro
-- Board themes: Classic, Wood, Contrast, Rabbit, Mono
-- Fresh-install side default: Random
-- Auto Flip option
-- Captured-piece display
-- Move/fullmove counter
-- Legal-move dots toggle
-- Persistent preferences and per-level W/L/D stats
-- Retains castling, en passant, promotion, threefold, 50-move, insufficient-material rules
+R1 Chess v1.5
+- Automatic game save after every completed move and Undo.
+- Extra save when the Creation/browser is hidden or closed.
+- Automatically resumes the saved game when reopened.
+- Saves board, turn, castling rights, en-passant target, 50-move counter,
+  repetition state, last move, Undo history, player side and completed-result state.
+- New Game intentionally replaces the saved game.
+- Retains v1.4: 10 AI levels, piece styles, board themes, Random default,
+  Auto Flip, captured-piece display, move counter, legal-dot toggle, stats,
+  castling, en passant, promotion and standard draw rules.

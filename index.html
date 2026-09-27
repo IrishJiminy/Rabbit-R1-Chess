@@ -34,7 +34,7 @@
 <div class="row"><label><input type="checkbox" id="autoFlip" checked> Auto Flip</label><label><input type="checkbox" id="dots" checked> Legal dots</label></div>
 <div class="row"><button id="flip">Flip board</button><button id="close" class="grow">Back</button></div>
 <div id="stats" class="sub"></div>
-<div class="sub">Levels 1–10 increase search strength. Full castling, en passant, promotion and standard draw rules.</div>
+<div class="sub">Levels 1–10 increase search strength. Games save automatically and resume when reopened.</div>
 </div>
 <div id="promo" class="overlay hidden"><b>PROMOTE TO</b><div class="row" style="justify-content:center">
 <button class="promoBtn" data-p="q">Q</button><button class="promoBtn" data-p="r">R</button><button class="promoBtn" data-p="b">B</button><button class="promoBtn" data-p="n">N</button>
@@ -143,9 +143,28 @@ function chooseAI(){
  if(Math.random()<cfg.blunder&&scored.length>3)return scored[Math.min(scored.length-1,Math.floor(2+Math.random()*Math.min(8,scored.length-2)))].m;
  let n=Math.min(cfg.top,scored.length);return scored[Math.floor(Math.random()*n)].m
 }
+
+function saveGame(){
+ try{
+  localStorage.setItem("r1chessGame15",JSON.stringify({
+   s:S,last:last,history:hist,reps:reps,human:human,resultRecorded:resultRecorded
+  }))
+ }catch(e){}
+}
+function loadGame(){
+ try{
+  let g=JSON.parse(localStorage.getItem("r1chessGame15")||"null");
+  if(!g||!g.s||!Array.isArray(g.s.b)||g.s.b.length!==64)return false;
+  S=g.s;last=g.last||null;hist=Array.isArray(g.history)?g.history:[];reps=g.reps||{};
+  human=g.human==="b"?"b":"w";resultRecorded=!!g.resultRecorded;
+  selected=null;legal=[];thinking=false;pendingPromo=null;
+  if(autoFlip)flipped=(human==="b");
+  return true
+ }catch(e){return false}
+}
 function snapshot(){return {s:clone(S),last:last?last.slice():null,reps:{...reps}}}
 function commit(m,promo="q",record=true){
- if(record)hist.push(snapshot());S=apply(S,m,promo);last=[m.f,m.t];selected=null;legal=[];reps[posKey(S)]=(reps[posKey(S)]||0)+1;render();recordResultIfNeeded()
+ if(record)hist.push(snapshot());S=apply(S,m,promo);last=[m.f,m.t];selected=null;legal=[];reps[posKey(S)]=(reps[posKey(S)]||0)+1;render();recordResultIfNeeded();saveGame()
 }
 function resultText(){
  let t=terminal(S,reps);if(!t)return null;
@@ -175,10 +194,10 @@ function tap(i){
  if(S.b[i]&&side(S.b[i])===human){selected=i;legal=legalFrom(i)}else{selected=null;legal=[]}render()
 }
 function engineMove(){if(S.turn===human||resultText())return;thinking=true;render();setTimeout(()=>{let m=chooseAI();thinking=false;if(m)commit(m,m.promo?"q":"q");else render()},25)}
-function reset(){S=fresh();if(autoFlip)flipped=(human==="b");selected=null;legal=[];hist=[];last=null;thinking=false;pendingPromo=null;reps={};reps[posKey(S)]=1;resultRecorded=false;$("promo").classList.add("hidden");render();renderStats();if(human==="b")setTimeout(engineMove,100)}
+function reset(){S=fresh();if(autoFlip)flipped=(human==="b");selected=null;legal=[];hist=[];last=null;thinking=false;pendingPromo=null;reps={};reps[posKey(S)]=1;resultRecorded=false;$("promo").classList.add("hidden");render();renderStats();saveGame();if(human==="b")setTimeout(engineMove,100)}
 document.querySelectorAll(".promoBtn").forEach(b=>b.onclick=()=>{if(!pendingPromo)return;let m=pendingPromo;pendingPromo=null;$("promo").classList.add("hidden");commit(m,b.dataset.p);setTimeout(engineMove,30)});
 $("new").onclick=()=>{sidePref=$("color").value;human=sidePref==="Random"?(Math.random()<.5?"w":"b"):(sidePref==="White"?"w":"b");level=+$("lvl").value;pieceStyle=$("pieceStyle").value;theme=$("theme").value;autoFlip=$("autoFlip").checked;showDots=$("dots").checked;save();$("menu").classList.add("hidden");reset()};
-$("undo").onclick=()=>{if(!hist.length)return;let x=hist.pop();S=x.s;last=x.last;reps=x.reps||{};if(S.turn!==human&&hist.length){x=hist.pop();S=x.s;last=x.last;reps=x.reps||{}}thinking=false;resultRecorded=false;selected=null;legal=[];pendingPromo=null;$("promo").classList.add("hidden");render();renderStats()};
+$("undo").onclick=()=>{if(!hist.length)return;let x=hist.pop();S=x.s;last=x.last;reps=x.reps||{};if(S.turn!==human&&hist.length){x=hist.pop();S=x.s;last=x.last;reps=x.reps||{}}thinking=false;resultRecorded=false;selected=null;legal=[];pendingPromo=null;$("promo").classList.add("hidden");render();renderStats();saveGame()};
 $("lvl").onchange=()=>{level=+$("lvl").value;renderStats()};
 $("pieceStyle").onchange=()=>{pieceStyle=$("pieceStyle").value;save();render()};
 $("theme").onchange=()=>{theme=$("theme").value;save();render()};
@@ -208,7 +227,15 @@ try{
  $("lvl").value=level;$("color").value=sidePref;$("pieceStyle").value=pieceStyle;$("theme").value=theme;$("autoFlip").checked=autoFlip;$("dots").checked=showDots;
 }catch(e){}
 
-if(sidePref==="Random")human=Math.random()<.5?"w":"b";else human=sidePref==="Black"?"b":"w";
-reset();if("serviceWorker"in navigator)navigator.serviceWorker.register("./sw.js").catch(()=>{});
+if(!loadGame()){
+ if(sidePref==="Random")human=Math.random()<.5?"w":"b";else human=sidePref==="Black"?"b":"w";
+ reset()
+}else{
+ render();renderStats();
+ if(S.turn!==human&&!resultText())setTimeout(engineMove,100)
+}
+window.addEventListener("pagehide",saveGame);
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden")saveGame()});
+if("serviceWorker"in navigator)navigator.serviceWorker.register("./sw.js").catch(()=>{});
 })();
 </script></body></html>
