@@ -1,10 +1,9 @@
-R1 Chess v1.5
-- Automatic game save after every completed move and Undo.
-- Extra save when the Creation/browser is hidden or closed.
-- Automatically resumes the saved game when reopened.
-- Saves board, turn, castling rights, en-passant target, 50-move counter,
-  repetition state, last move, Undo history, player side and completed-result state.
-- New Game intentionally replaces the saved game.
-- Retains v1.4: 10 AI levels, piece styles, board themes, Random default,
-  Auto Flip, captured-piece display, move counter, legal-dot toggle, stats,
-  castling, en passant, promotion and standard draw rules.
+R1 Chess v1.6
+SAVE/RESUME FIX
+- Uses Rabbit Creation persistent storage (window.creationStorage.plain) as the primary R1 save.
+- Values are Base64 encoded for the Rabbit storage API.
+- Startup awaits the asynchronous R1 load before creating a fresh game.
+- localStorage remains a desktop/browser fallback.
+- Saves after moves, Undo, New Game and on hide/close.
+- Restores full chess position, player side, special-rule state, repetition state,
+  last move, Undo history and completed-result state.

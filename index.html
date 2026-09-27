@@ -34,7 +34,7 @@
 <div class="row"><label><input type="checkbox" id="autoFlip" checked> Auto Flip</label><label><input type="checkbox" id="dots" checked> Legal dots</label></div>
 <div class="row"><button id="flip">Flip board</button><button id="close" class="grow">Back</button></div>
 <div id="stats" class="sub"></div>
-<div class="sub">Levels 1–10 increase search strength. Games save automatically and resume when reopened.</div>
+<div class="sub">Levels 1–10 increase search strength. Games save automatically to R1 storage and resume when reopened.</div>
 </div>
 <div id="promo" class="overlay hidden"><b>PROMOTE TO</b><div class="row" style="justify-content:center">
 <button class="promoBtn" data-p="q">Q</button><button class="promoBtn" data-p="r">R</button><button class="promoBtn" data-p="b">B</button><button class="promoBtn" data-p="n">N</button>
@@ -144,23 +144,40 @@ function chooseAI(){
  let n=Math.min(cfg.top,scored.length);return scored[Math.floor(Math.random()*n)].m
 }
 
-function saveGame(){
+function b64encode(str){try{return btoa(unescape(encodeURIComponent(str)))}catch(e){return btoa(str)}}
+function b64decode(str){try{return decodeURIComponent(escape(atob(str)))}catch(e){return atob(str)}}
+function gamePayload(){return JSON.stringify({s:S,last:last,history:hist,reps:reps,human:human,resultRecorded:resultRecorded})}
+async function saveGame(){
+ if(!S)return false;
+ let raw=gamePayload(),ok=false;
  try{
-  localStorage.setItem("r1chessGame15",JSON.stringify({
-   s:S,last:last,history:hist,reps:reps,human:human,resultRecorded:resultRecorded
-  }))
+  if(window.creationStorage&&window.creationStorage.plain&&window.creationStorage.plain.setItem){
+   await window.creationStorage.plain.setItem("r1chess_game_v16",b64encode(raw));ok=true;
+  }
  }catch(e){}
+ try{localStorage.setItem("r1chessGame16",raw);ok=true}catch(e){}
+ return ok
 }
-function loadGame(){
+function restoreGameObject(g){
+ if(!g||!g.s||!Array.isArray(g.s.b)||g.s.b.length!==64)return false;
+ S=g.s;last=g.last||null;hist=Array.isArray(g.history)?g.history:[];reps=g.reps||{};
+ human=g.human==="b"?"b":"w";resultRecorded=!!g.resultRecorded;
+ selected=null;legal=[];thinking=false;pendingPromo=null;
+ if(autoFlip)flipped=(human==="b");
+ return true
+}
+async function loadGame(){
  try{
-  let g=JSON.parse(localStorage.getItem("r1chessGame15")||"null");
-  if(!g||!g.s||!Array.isArray(g.s.b)||g.s.b.length!==64)return false;
-  S=g.s;last=g.last||null;hist=Array.isArray(g.history)?g.history:[];reps=g.reps||{};
-  human=g.human==="b"?"b":"w";resultRecorded=!!g.resultRecorded;
-  selected=null;legal=[];thinking=false;pendingPromo=null;
-  if(autoFlip)flipped=(human==="b");
-  return true
- }catch(e){return false}
+  if(window.creationStorage&&window.creationStorage.plain&&window.creationStorage.plain.getItem){
+   let stored=await window.creationStorage.plain.getItem("r1chess_game_v16");
+   if(stored&&restoreGameObject(JSON.parse(b64decode(stored))))return true;
+  }
+ }catch(e){}
+ try{
+  let raw=localStorage.getItem("r1chessGame16")||localStorage.getItem("r1chessGame15");
+  if(raw&&restoreGameObject(JSON.parse(raw)))return true;
+ }catch(e){}
+ return false
 }
 function snapshot(){return {s:clone(S),last:last?last.slice():null,reps:{...reps}}}
 function commit(m,promo="q",record=true){
@@ -227,15 +244,19 @@ try{
  $("lvl").value=level;$("color").value=sidePref;$("pieceStyle").value=pieceStyle;$("theme").value=theme;$("autoFlip").checked=autoFlip;$("dots").checked=showDots;
 }catch(e){}
 
-if(!loadGame()){
- if(sidePref==="Random")human=Math.random()<.5?"w":"b";else human=sidePref==="Black"?"b":"w";
- reset()
-}else{
- render();renderStats();
- if(S.turn!==human&&!resultText())setTimeout(engineMove,100)
+async function boot(){
+ let restored=await loadGame();
+ if(!restored){
+  if(sidePref==="Random")human=Math.random()<.5?"w":"b";else human=sidePref==="Black"?"b":"w";
+  reset();
+ }else{
+  render();renderStats();
+  if(S.turn!==human&&!resultText())setTimeout(engineMove,100);
+ }
 }
-window.addEventListener("pagehide",saveGame);
+window.addEventListener("pagehide",()=>{saveGame()});
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden")saveGame()});
+boot();
 if("serviceWorker"in navigator)navigator.serviceWorker.register("./sw.js").catch(()=>{});
 })();
 </script></body></html>
