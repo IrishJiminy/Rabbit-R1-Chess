@@ -132,17 +132,64 @@ function negamax(s,depth,alpha,beta,root,deadline){
  return best
 }
 const DIFF={
-1:{depth:1,ms:30,top:10,blunder:.40},2:{depth:1,ms:45,top:6,blunder:.24},3:{depth:2,ms:80,top:4,blunder:.12},
-4:{depth:2,ms:120,top:3,blunder:.06},5:{depth:3,ms:180,top:2,blunder:.025},6:{depth:3,ms:260,top:1,blunder:.01},
-7:{depth:4,ms:360,top:1,blunder:0},8:{depth:4,ms:520,top:1,blunder:0},9:{depth:5,ms:750,top:1,blunder:0},
-10:{depth:5,ms:1100,top:1,blunder:0}};
-function chooseAI(){
- let cfg=DIFF[level],root=S.turn,ms=ordered(S,moves(S)),deadline=performance.now()+cfg.ms,scored=[];
- for(let m of ms){let v;try{v=negamax(apply(S,m),cfg.depth-1,-Infinity,Infinity,root,deadline)}catch(e){v=e==="timeout"?evaluate(apply(S,m),root):-99999}scored.push({m,v})}
- scored.sort((a,b)=>b.v-a.v);
- if(Math.random()<cfg.blunder&&scored.length>3)return scored[Math.min(scored.length-1,Math.floor(2+Math.random()*Math.min(8,scored.length-2)))].m;
- let n=Math.min(cfg.top,scored.length);return scored[Math.floor(Math.random()*n)].m
+1:{depth:1,ms:35,top:16,blunder:.55},
+2:{depth:1,ms:45,top:10,blunder:.35},
+3:{depth:1,ms:60,top:6,blunder:.18},
+4:{depth:1,ms:80,top:3,blunder:.07},
+5:{depth:1,ms:100,top:1,blunder:0},
+6:{depth:2,ms:180,top:1,blunder:0},
+7:{depth:2,ms:280,top:1,blunder:0},
+8:{depth:3,ms:450,top:1,blunder:0},
+9:{depth:4,ms:750,top:1,blunder:0},
+10:{depth:5,ms:1200,top:1,blunder:0}};
+function scoreRootAtDepth(rootMoves,root,depth,deadline){
+ let scored=[];
+ for(let m of rootMoves){
+  if(performance.now()>deadline)throw "timeout";
+  let v=negamax(apply(S,m),depth-1,-Infinity,Infinity,root,deadline);
+  scored.push({m,v});
+ }
+ return scored.sort((a,b)=>b.v-a.v)
 }
+function chooseAI(){
+ let cfg=DIFF[level],root=S.turn,rootMoves=ordered(S,moves(S));
+ if(!rootMoves.length)return null;
+ // Always establish a complete one-ply ranking first. Higher levels then deepen
+ // the ENTIRE root set only when there is enough time, avoiding partial-search
+ // timeouts that previously made a higher level occasionally play worse.
+ let scored=rootMoves.map(m=>({m,v:evaluate(apply(S,m),root)})).sort((a,b)=>b.v-a.v);
+ let deadline=performance.now()+cfg.ms;
+ for(let d=1;d<=cfg.depth;d++){
+  try{let complete=scoreRootAtDepth(rootMoves,root,d,deadline);if(complete.length===rootMoves.length)scored=complete}
+  catch(e){if(e!=="timeout")throw e;break}
+ }
+ // Levels 1-4 deliberately make progressively fewer mistakes. Level 5+
+ // always chooses the best move found; increasing search depth/time supplies
+ // the strength progression instead of random blunders.
+ if(cfg.blunder&&Math.random()<cfg.blunder&&scored.length>2){
+  let lo=Math.min(scored.length-1,Math.max(1,cfg.top));
+  let span=Math.max(1,scored.length-lo);
+  return scored[lo+Math.floor(Math.random()*span)].m
+ }
+ let n=Math.min(cfg.top,scored.length);
+ return scored[Math.floor(Math.random()*n)].m
+}
+
+// Keep the display awake while Chess is the foreground Creation. This is the
+// standard Screen Wake Lock API used by Chromium/WebView when available.
+// Re-request it whenever the Creation becomes visible again because Android
+// releases screen wake locks when a document is hidden.
+let screenWakeLock=null;
+async function keepScreenAwake(){
+ try{
+  if('wakeLock' in navigator && document.visibilityState==='visible'){
+   if(!screenWakeLock || screenWakeLock.released) screenWakeLock=await navigator.wakeLock.request('screen');
+  }
+ }catch(e){}
+}
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')keepScreenAwake()});
+['pointerdown','touchstart','click','keydown'].forEach(ev=>document.addEventListener(ev,keepScreenAwake,{passive:true}));
+keepScreenAwake();
 
 function b64encode(str){try{return btoa(unescape(encodeURIComponent(str)))}catch(e){return btoa(str)}}
 function b64decode(str){try{return decodeURIComponent(escape(atob(str)))}catch(e){return atob(str)}}
@@ -221,7 +268,7 @@ $("theme").onchange=()=>{theme=$("theme").value;save();render()};
 $("autoFlip").onchange=()=>{autoFlip=$("autoFlip").checked;if(autoFlip)flipped=(human==="b");save();render()};
 $("dots").onchange=()=>{showDots=$("dots").checked;save();render()};
 $("flip").onclick=()=>{flipped=!flipped;save();render()};$("close").onclick=()=>$("menu").classList.add("hidden");$("menuBtn").onclick=()=>$("menu").classList.toggle("hidden");$("status").onclick=()=>$("menu").classList.toggle("hidden");
-document.addEventListener("sideClick",()=>$("menu").classList.toggle("hidden"));document.addEventListener("scrollUp",()=>{if(!$("menu").classList.contains("hidden"))$("lvl").value=Math.min(5,+$("lvl").value+1)});document.addEventListener("scrollDown",()=>{if(!$("menu").classList.contains("hidden"))$("lvl").value=Math.max(1,+$("lvl").value-1)});
+document.addEventListener("sideClick",()=>$("menu").classList.toggle("hidden"));document.addEventListener("scrollUp",()=>{if(!$("menu").classList.contains("hidden"))$("lvl").value=Math.min(10,+$("lvl").value+1)});document.addEventListener("scrollDown",()=>{if(!$("menu").classList.contains("hidden"))$("lvl").value=Math.max(1,+$("lvl").value-1)});
 function getStats(){
  try{return JSON.parse(localStorage.getItem("r1chessStats14")||localStorage.getItem("r1chessStats13")||"null")||{}} catch(e){return {}}
 }
